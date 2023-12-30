@@ -239,6 +239,9 @@ int NanoDetPlus::load(AAssetManager* mgr, const char* modeltype, int _target_siz
 #if NCNN_VULKAN
     nanodet_plus.opt.use_vulkan_compute = use_gpu;
 #endif
+    nanodet_plus.opt.use_winograd_convolution = true;
+    nanodet_plus.opt.use_sgemm_convolution = true;
+    nanodet_plus.opt.use_int8_inference = true;
 
     nanodet_plus.opt.num_threads = ncnn::get_big_cpu_count();
     nanodet_plus.opt.blob_allocator = &blob_pool_allocator;
