@@ -26,7 +26,7 @@
 #include <platform.h>
 #include <benchmark.h>
 
-#include "nanodet.h"
+#include "nanodetplus.h"
 
 #include "ndkcamera.h"
 
@@ -110,7 +110,7 @@ static int draw_fps(cv::Mat& rgb)
     return 0;
 }
 
-static NanoDet* g_nanodet = 0;
+static NanoDetPlus* g_nanodet = 0;
 static ncnn::Mutex lock;
 
 class MyNdkCamera : public NdkCameraWindow
@@ -121,7 +121,7 @@ public:
 
 void MyNdkCamera::on_image_render(cv::Mat& rgb) const
 {
-    // nanodet
+    // nanodet plus
     {
         ncnn::MutexLockGuard g(lock);
 
@@ -183,12 +183,20 @@ JNIEXPORT jboolean JNICALL Java_com_tencent_nanodetncnn_NanoDetNcnn_loadModel(JN
 
     const char* modeltypes[] =
     {
-        "nanodet-plus-m_416-int8",
-        "nanodet-plus-m-1.5x_416-opt",
+        "plus-m_320",
+        "plus-m_416",
+        "plus-m_416_int8",
+        "plus-m-1.5x_320",
+        "plus-m-1.5x_416",
+        "plus-m-1.5x_416_int8",
     };
 
     const int target_sizes[] =
     {
+        320,
+        416,
+        416,
+        320,
         416,
         416,
     };
@@ -197,10 +205,18 @@ JNIEXPORT jboolean JNICALL Java_com_tencent_nanodetncnn_NanoDetNcnn_loadModel(JN
     {
         {103.53f, 116.28f, 123.675f},
         {103.53f, 116.28f, 123.675f},
+        {103.53f, 116.28f, 123.675f},
+        {103.53f, 116.28f, 123.675f},
+        {103.53f, 116.28f, 123.675f},
+        {103.53f, 116.28f, 123.675f},
     };
 
     const float norm_vals[][3] =
     {
+        {1.f / 57.375f, 1.f / 57.12f, 1.f / 58.395f},
+        {1.f / 57.375f, 1.f / 57.12f, 1.f / 58.395f},
+        {1.f / 57.375f, 1.f / 57.12f, 1.f / 58.395f},
+        {1.f / 57.375f, 1.f / 57.12f, 1.f / 58.395f},
         {1.f / 57.375f, 1.f / 57.12f, 1.f / 58.395f},
         {1.f / 57.375f, 1.f / 57.12f, 1.f / 58.395f},
     };
@@ -222,11 +238,10 @@ JNIEXPORT jboolean JNICALL Java_com_tencent_nanodetncnn_NanoDetNcnn_loadModel(JN
         else
         {
             if (!g_nanodet)
-                g_nanodet = new NanoDet;
+                g_nanodet = new NanoDetPlus;
             g_nanodet->load(mgr, modeltype, target_size, mean_vals[(int)modelid], norm_vals[(int)modelid], use_gpu);
         }
     }
-
     return JNI_TRUE;
 }
 

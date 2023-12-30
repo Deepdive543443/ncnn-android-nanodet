@@ -8,6 +8,6 @@ find_package(OpenCV REQUIRED core imgproc)
 set(ncnn_DIR D:/Android_projects/ncnn-20231027-android-vulkan/ncnn-20231027-android-vulkan/${ANDROID_ABI}/lib/cmake/ncnn)
 find_package(ncnn REQUIRED)
 
-add_library(nanodetncnn SHARED nanodetncnn.cpp nanodet.cpp ndkcamera.cpp)
+add_library(nanodetncnn SHARED nanodetncnn.cpp nanodetplus.cpp ndkcamera.cpp)
 
 target_link_libraries(nanodetncnn ncnn ${OpenCV_LIBS} camera2ndk mediandk)
