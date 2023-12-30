@@ -1,4 +1,9 @@
-# ncnn-android-nanodet
+# ncnn-android-nanodet-plus
+This a fork of ncnn-android-nanodet for testing Nanodet Plus performance on my phone
+
+
+
+# ncnn-android-nanodet(Original ReadME.md)
 
 The NanoDet object detection
 
