@@ -35,23 +35,22 @@
 
 #if __ARM_NEON
 #include <arm_neon.h>
-#endif // __ARM_NEON
+#endif  // __ARM_NEON
 
 static int draw_unsupported(cv::Mat& rgb)
 {
     const char text[] = "unsupported";
 
-    int baseLine = 0;
+    int      baseLine   = 0;
     cv::Size label_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, 1.0, 1, &baseLine);
 
     int y = (rgb.rows - label_size.height) / 2;
     int x = (rgb.cols - label_size.width) / 2;
 
     cv::rectangle(rgb, cv::Rect(cv::Point(x, y), cv::Size(label_size.width, label_size.height + baseLine)),
-                    cv::Scalar(255, 255, 255), -1);
+                  cv::Scalar(255, 255, 255), -1);
 
-    cv::putText(rgb, text, cv::Point(x, y + label_size.height),
-                cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 0));
+    cv::putText(rgb, text, cv::Point(x, y + label_size.height), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 0));
 
     return 0;
 }
@@ -61,8 +60,8 @@ static int draw_fps(cv::Mat& rgb)
     // resolve moving average
     float avg_fps = 0.f;
     {
-        static double t0 = 0.f;
-        static float fps_history[10] = {0.f};
+        static double t0              = 0.f;
+        static float  fps_history[10] = {0.f};
 
         double t1 = ncnn::get_current_time();
         if (t0 == 0.f)
@@ -72,7 +71,7 @@ static int draw_fps(cv::Mat& rgb)
         }
 
         float fps = 1000.f / (t1 - t0);
-        t0 = t1;
+        t0        = t1;
 
         for (int i = 9; i >= 1; i--)
         {
@@ -95,17 +94,16 @@ static int draw_fps(cv::Mat& rgb)
     char text[32];
     sprintf(text, "FPS=%.2f", avg_fps);
 
-    int baseLine = 0;
+    int      baseLine   = 0;
     cv::Size label_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
 
     int y = 0;
     int x = rgb.cols - label_size.width;
 
     cv::rectangle(rgb, cv::Rect(cv::Point(x, y), cv::Size(label_size.width, label_size.height + baseLine)),
-                    cv::Scalar(255, 255, 255), -1);
+                  cv::Scalar(255, 255, 255), -1);
 
-    cv::putText(rgb, text, cv::Point(x, y + label_size.height),
-                cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
+    cv::putText(rgb, text, cv::Point(x, y + label_size.height), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
 
     return 0;
 }
@@ -113,9 +111,8 @@ static int draw_fps(cv::Mat& rgb)
 static FastestDet* g_fastest = 0;
 static ncnn::Mutex lock;
 
-class MyNdkCamera : public NdkCameraWindow
-{
-public:
+class MyNdkCamera : public NdkCameraWindow {
+   public:
     virtual void on_image_render(cv::Mat& rgb) const;
 };
 
@@ -170,7 +167,9 @@ JNIEXPORT void JNI_OnUnload(JavaVM* vm, void* reserved)
 }
 
 // public native boolean loadModel(AssetManager mgr, int modelid, int cpugpu);
-JNIEXPORT jboolean JNICALL Java_com_tencent_nanodetncnn_NanoDetNcnn_loadModel(JNIEnv* env, jobject thiz, jobject assetManager, jint modelid, jint cpugpu)
+JNIEXPORT jboolean JNICALL Java_com_tencent_nanodetncnn_NanoDetNcnn_loadModel(JNIEnv* env, jobject thiz,
+                                                                              jobject assetManager, jint modelid,
+                                                                              jint cpugpu)
 {
     if (modelid < 0 || modelid > 6 || cpugpu < 0 || cpugpu > 1)
     {
@@ -181,29 +180,25 @@ JNIEXPORT jboolean JNICALL Java_com_tencent_nanodetncnn_NanoDetNcnn_loadModel(JN
 
     __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "loadModel %p", mgr);
 
-    const char* modeltypes[] =
-    {
+    const char* modeltypes[] = {
         "FastestDet",
     };
 
-    const int target_sizes[] =
-    {
+    const int target_sizes[] = {
         352,
     };
 
-    const float mean_vals[][3] =
-    {
+    const float mean_vals[][3] = {
         {0.f, 0.f, 0.f},
     };
 
-    const float norm_vals[][3] =
-    {
+    const float norm_vals[][3] = {
         {0.00392157f, 0.00392157f, 0.00392157f},
     };
 
-    const char* modeltype = modeltypes[(int)modelid];
-    int target_size = target_sizes[(int)modelid];
-    bool use_gpu = (int)cpugpu == 1;
+    const char* modeltype   = modeltypes[(int)modelid];
+    int         target_size = target_sizes[(int)modelid];
+    bool        use_gpu     = (int)cpugpu == 1;
 
     // reload
     {
@@ -214,11 +209,9 @@ JNIEXPORT jboolean JNICALL Java_com_tencent_nanodetncnn_NanoDetNcnn_loadModel(JN
             // no gpu
             delete g_fastest;
             g_fastest = 0;
-        }
-        else
+        } else
         {
-            if (!g_fastest)
-                g_fastest = new FastestDet;
+            if (!g_fastest) g_fastest = new FastestDet;
             g_fastest->load(mgr, modeltype, target_size, mean_vals[(int)modelid], norm_vals[(int)modelid], use_gpu);
         }
     }
@@ -228,8 +221,7 @@ JNIEXPORT jboolean JNICALL Java_com_tencent_nanodetncnn_NanoDetNcnn_loadModel(JN
 // public native boolean openCamera(int facing);
 JNIEXPORT jboolean JNICALL Java_com_tencent_nanodetncnn_NanoDetNcnn_openCamera(JNIEnv* env, jobject thiz, jint facing)
 {
-    if (facing < 0 || facing > 1)
-        return JNI_FALSE;
+    if (facing < 0 || facing > 1) return JNI_FALSE;
 
     __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "openCamera %d", facing);
 
@@ -249,7 +241,8 @@ JNIEXPORT jboolean JNICALL Java_com_tencent_nanodetncnn_NanoDetNcnn_closeCamera(
 }
 
 // public native boolean setOutputWindow(Surface surface);
-JNIEXPORT jboolean JNICALL Java_com_tencent_nanodetncnn_NanoDetNcnn_setOutputWindow(JNIEnv* env, jobject thiz, jobject surface)
+JNIEXPORT jboolean JNICALL Java_com_tencent_nanodetncnn_NanoDetNcnn_setOutputWindow(JNIEnv* env, jobject thiz,
+                                                                                    jobject surface)
 {
     ANativeWindow* win = ANativeWindow_fromSurface(env, surface);
 
@@ -259,5 +252,4 @@ JNIEXPORT jboolean JNICALL Java_com_tencent_nanodetncnn_NanoDetNcnn_setOutputWin
 
     return JNI_TRUE;
 }
-
 }

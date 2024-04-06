@@ -25,17 +25,15 @@ static inline float intersection_area(const Object& a, const Object& b)
 
 static void qsort_descent_inplace(std::vector<Object>& objects, int left, int right)
 {
-    int i = left;
-    int j = right;
+    int   i = left;
+    int   j = right;
     float p = objects[(left + right) / 2].prob;
 
     while (i <= j)
     {
-        while (objects[i].prob > p)
-            i++;
+        while (objects[i].prob > p) i++;
 
-        while (objects[j].prob < p)
-            j--;
+        while (objects[j].prob < p) j--;
 
         if (i <= j)
         {
@@ -53,6 +51,7 @@ static void qsort_descent_inplace(std::vector<Object>& objects, int left, int ri
         {
             if (left < j) qsort_descent_inplace(objects, left, j);
         }
+        
         #pragma omp section
         {
             if (i < right) qsort_descent_inplace(objects, i, right);
@@ -62,8 +61,7 @@ static void qsort_descent_inplace(std::vector<Object>& objects, int left, int ri
 
 static void qsort_descent_inplace(std::vector<Object>& objects)
 {
-    if (objects.empty())
-        return;
+    if (objects.empty()) return;
 
     qsort_descent_inplace(objects, 0, objects.size() - 1);
 }
@@ -89,16 +87,12 @@ static void nms_sorted_bboxes(const std::vector<Object>& objects, std::vector<in
         {
             const Object& b = objects[picked[j]];
 
-            // intersection over union
             float inter_area = intersection_area(a, b);
             float union_area = areas[i] + areas[picked[j]] - inter_area;
-            // float IoU = inter_area / union_area
-            if (inter_area / union_area > nms_threshold)
-                keep = 0;
+            if (inter_area / union_area > nms_threshold) keep = 0;
         }
 
-        if (keep)
-            picked.push_back(i);
+        if (keep) picked.push_back(i);
     }
 }
 
@@ -108,7 +102,8 @@ FastestDet::FastestDet()
     workspace_pool_allocator.set_size_compare_ratio(0.f);
 }
 
-int FastestDet::load(AAssetManager* mgr, const char* modeltype, int _target_size, const float* _mean_vals, const float* _norm_vals, bool use_gpu)
+int FastestDet::load(AAssetManager* mgr, const char* modeltype, int _target_size, const float* _mean_vals,
+                     const float* _norm_vals, bool use_gpu)
 {
     fastestdet.clear();
     blob_pool_allocator.clear();
@@ -123,17 +118,16 @@ int FastestDet::load(AAssetManager* mgr, const char* modeltype, int _target_size
     fastestdet.opt.use_vulkan_compute = use_gpu;
 #endif
     fastestdet.opt.use_winograd_convolution = true;
-    fastestdet.opt.use_sgemm_convolution = true;
-    fastestdet.opt.use_int8_inference = true;
-
-    fastestdet.opt.num_threads = ncnn::get_big_cpu_count();
-    fastestdet.opt.blob_allocator = &blob_pool_allocator;
-    fastestdet.opt.workspace_allocator = &workspace_pool_allocator;
+    fastestdet.opt.use_sgemm_convolution    = true;
+    fastestdet.opt.use_int8_inference       = true;
+    fastestdet.opt.num_threads              = ncnn::get_big_cpu_count();
+    fastestdet.opt.blob_allocator           = &blob_pool_allocator;
+    fastestdet.opt.workspace_allocator      = &workspace_pool_allocator;
 
     fastestdet.load_param(mgr, "FastestDet.param");
     fastestdet.load_model(mgr, "FastestDet.bin");
 
-    target_size = _target_size;
+    target_size  = _target_size;
     mean_vals[0] = _mean_vals[0];
     mean_vals[1] = _mean_vals[1];
     mean_vals[2] = _mean_vals[2];
@@ -148,8 +142,8 @@ int FastestDet::detect(const cv::Mat& rgb, std::vector<Object>& objects, float p
 {
     ncnn::Mat out;
     {
-        ncnn::Mat input = ncnn::Mat::from_pixels_resize(rgb.data, ncnn::Mat::PIXEL_BGR, rgb.cols,
-                                                        rgb.rows, target_size, target_size);
+        ncnn::Mat input =
+            ncnn::Mat::from_pixels_resize(rgb.data, ncnn::Mat::PIXEL_BGR, rgb.cols, rgb.rows, target_size, target_size);
 
         input.substract_mean_normalize(mean_vals, norm_vals);
         ncnn::Extractor ex = fastestdet.create_extractor();
@@ -158,28 +152,33 @@ int FastestDet::detect(const cv::Mat& rgb, std::vector<Object>& objects, float p
         ex.extract("output", out);
     }
 
-    const int    c_step = out.cstep;
+    float     obj_score;
+    const int c_step    = out.cstep;
     const int num_class = out.c;
 
-    float               obj_score;
     std::vector<Object> proposals;
 
-    for (int h = 0; h < out.h; h++) {
-        float *ptr = out.row(h);
-        for (int w = 0; w < out.w; w++) {
+    for (int h = 0; h < out.h; h++)
+    {
+        float* ptr = out.row(h);
+        for (int w = 0; w < out.w; w++)
+        {
             float obj_score     = ptr[0];
             float max_cls_score = 0.0;
             int   max_cls_idx   = -1;
 
-            for (int c = 0; c < num_class; c++) {
+            for (int c = 0; c < num_class; c++)
+            {
                 float cls_score = ptr[(c + 5) * c_step];
-                if (cls_score > max_cls_score) {
+                if (cls_score > max_cls_score)
+                {
                     max_cls_score = cls_score;
                     max_cls_idx   = c;
                 }
             }
 
-            if (pow(max_cls_score, 0.4) * pow(obj_score, 0.6) > 0.65) {
+            if (pow(max_cls_score, 0.4) * pow(obj_score, 0.6) > 0.65)
+            {
                 float x_offset   = FAST_TANH(ptr[c_step]);
                 float y_offset   = FAST_TANH(ptr[c_step * 2]);
                 float box_width  = FAST_SIGMOID(ptr[c_step * 3]);
@@ -188,12 +187,12 @@ int FastestDet::detect(const cv::Mat& rgb, std::vector<Object>& objects, float p
                 float y_center   = (h + y_offset) / out.h;
 
                 Object obj;
-                obj.rect.x = (x_center - 0.5 * box_width) * rgb.cols;
-                obj.rect.y = (y_center - 0.5 * box_height) * rgb.rows;
-                obj.rect.width =  box_width * rgb.cols;
+                obj.rect.x      = (x_center - 0.5 * box_width) * rgb.cols;
+                obj.rect.y      = (y_center - 0.5 * box_height) * rgb.rows;
+                obj.rect.width  = box_width * rgb.cols;
                 obj.rect.height = box_height * rgb.rows;
-                obj.label = max_cls_idx;
-                obj.prob = obj_score;
+                obj.label       = max_cls_idx;
+                obj.prob        = obj_score;
                 proposals.push_back(obj);
             }
             ptr++;
@@ -222,17 +221,13 @@ int FastestDet::detect(const cv::Mat& rgb, std::vector<Object>& objects, float p
         x1 = std::max(std::min(x1, (float)(rgb.cols - 1)), 0.f);
         y1 = std::max(std::min(y1, (float)(rgb.rows - 1)), 0.f);
 
-        objects[i].rect.x = x0;
-        objects[i].rect.y = y0;
-        objects[i].rect.width = x1 - x0;
+        objects[i].rect.x      = x0;
+        objects[i].rect.y      = y0;
+        objects[i].rect.width  = x1 - x0;
         objects[i].rect.height = y1 - y0;
     }
-    struct
-    {
-        bool operator()(const Object& a, const Object& b) const
-        {
-            return a.rect.area() > b.rect.area();
-        }
+    struct {
+        bool operator()(const Object& a, const Object& b) const { return a.rect.area() > b.rect.area(); }
     } objects_area_greater;
     std::sort(objects.begin(), objects.end(), objects_area_greater);
     return 1;
@@ -240,45 +235,44 @@ int FastestDet::detect(const cv::Mat& rgb, std::vector<Object>& objects, float p
 
 int FastestDet::draw(cv::Mat& rgb, const std::vector<Object>& objects)
 {
-    static const char* class_names[] = {
-            "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
-            "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-            "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-            "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
-            "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
-            "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
-            "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
-            "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
-            "hair drier", "toothbrush"
-    };
+    static const char* class_names[] = {"person",        "bicycle",      "car",
+                                        "motorcycle",    "airplane",     "bus",
+                                        "train",         "truck",        "boat",
+                                        "traffic light", "fire hydrant", "stop sign",
+                                        "parking meter", "bench",        "bird",
+                                        "cat",           "dog",          "horse",
+                                        "sheep",         "cow",          "elephant",
+                                        "bear",          "zebra",        "giraffe",
+                                        "backpack",      "umbrella",     "handbag",
+                                        "tie",           "suitcase",     "frisbee",
+                                        "skis",          "snowboard",    "sports ball",
+                                        "kite",          "baseball bat", "baseball glove",
+                                        "skateboard",    "surfboard",    "tennis racket",
+                                        "bottle",        "wine glass",   "cup",
+                                        "fork",          "knife",        "spoon",
+                                        "bowl",          "banana",       "apple",
+                                        "sandwich",      "orange",       "broccoli",
+                                        "carrot",        "hot dog",      "pizza",
+                                        "donut",         "cake",         "chair",
+                                        "couch",         "potted plant", "bed",
+                                        "dining table",  "toilet",       "tv",
+                                        "laptop",        "mouse",        "remote",
+                                        "keyboard",      "cell phone",   "microwave",
+                                        "oven",          "toaster",      "sink",
+                                        "refrigerator",  "book",         "clock",
+                                        "vase",          "scissors",     "teddy bear",
+                                        "hair drier",    "toothbrush"};
 
     static const unsigned char colors[19][3] = {
-            { 54,  67, 244},
-            { 99,  30, 233},
-            {176,  39, 156},
-            {183,  58, 103},
-            {181,  81,  63},
-            {243, 150,  33},
-            {244, 169,   3},
-            {212, 188,   0},
-            {136, 150,   0},
-            { 80, 175,  76},
-            { 74, 195, 139},
-            { 57, 220, 205},
-            { 59, 235, 255},
-            {  7, 193, 255},
-            {  0, 152, 255},
-            { 34,  87, 255},
-            { 72,  85, 121},
-            {158, 158, 158},
-            {139, 125,  96}
-    };
+        {54, 67, 244}, {99, 30, 233}, {176, 39, 156}, {183, 58, 103},  {181, 81, 63},  {243, 150, 33}, {244, 169, 3},
+        {212, 188, 0}, {136, 150, 0}, {80, 175, 76},  {74, 195, 139},  {57, 220, 205}, {59, 235, 255}, {7, 193, 255},
+        {0, 152, 255}, {34, 87, 255}, {72, 85, 121},  {158, 158, 158}, {139, 125, 96}};
 
     int color_index = 0;
 
     for (size_t i = 0; i < objects.size(); i++)
     {
-        const Object& obj = objects[i];
+        const Object&        obj   = objects[i];
         const unsigned char* color = colors[color_index % 19];
         color_index++;
 
@@ -289,15 +283,13 @@ int FastestDet::draw(cv::Mat& rgb, const std::vector<Object>& objects)
         char text[256];
         sprintf(text, "%s %.1f%%", class_names[obj.label], obj.prob * 100);
 
-        int baseLine = 0;
+        int      baseLine   = 0;
         cv::Size label_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
 
         int x = obj.rect.x;
         int y = obj.rect.y - label_size.height - baseLine;
-        if (y < 0)
-            y = 0;
-        if (x + label_size.width > rgb.cols)
-            x = rgb.cols - label_size.width;
+        if (y < 0) y = 0;
+        if (x + label_size.width > rgb.cols) x = rgb.cols - label_size.width;
 
         cv::rectangle(rgb, cv::Rect(cv::Point(x, y), cv::Size(label_size.width, label_size.height + baseLine)), cc, -1);
 

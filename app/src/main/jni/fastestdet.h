@@ -20,31 +20,31 @@ static inline float fast_exp(float x)
 #define FAST_SIGMOID(X) (1.0f / (1.0f + fast_exp(-X)))
 #define FAST_TANH(X)    (2.f / (1.f + fast_exp(-2 * X)) - 1.f)
 
-typedef struct Object
-{
+typedef struct Object {
     cv::Rect_<float> rect;
-    int label;
-    float prob;
+    int              label;
+    float            prob;
 } Object;
 
-class FastestDet
-{
-public:
+class FastestDet {
+   public:
     FastestDet();
 
-    int load(AAssetManager* mgr, const char* modeltype, int target_size, const float* mean_vals, const float* norm_vals, bool use_gpu = false);
+    int load(AAssetManager* mgr, const char* modeltype, int target_size, const float* mean_vals, const float* norm_vals,
+             bool use_gpu = false);
 
-    int detect(const cv::Mat& rgb, std::vector<Object>& objects, float prob_threshold = 0.65f, float nms_threshold = 0.65f);
+    int detect(const cv::Mat& rgb, std::vector<Object>& objects, float prob_threshold = 0.65f,
+               float nms_threshold = 0.65f);
 
     int draw(cv::Mat& rgb, const std::vector<Object>& objects);
 
-private:
-    ncnn::Net fastestdet;
-    int target_size;
-    float mean_vals[3];
-    float norm_vals[3];
+   private:
+    ncnn::Net                   fastestdet;
+    int                         target_size;
+    float                       mean_vals[3];
+    float                       norm_vals[3];
     ncnn::UnlockedPoolAllocator blob_pool_allocator;
-    ncnn::PoolAllocator workspace_pool_allocator;
+    ncnn::PoolAllocator         workspace_pool_allocator;
 };
 
-#endif // FASTESTDET_H
+#endif  // FASTESTDET_H
