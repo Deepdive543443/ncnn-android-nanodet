@@ -108,7 +108,7 @@ FastestDet::FastestDet()
     workspace_pool_allocator.set_size_compare_ratio(0.f);
 }
 
-int FastestDet::load(const char* modeltype, int _target_size, const float* _mean_vals, const float* _norm_vals, bool use_gpu)
+int FastestDet::load(AAssetManager* mgr, const char* modeltype, int _target_size, const float* _mean_vals, const float* _norm_vals, bool use_gpu)
 {
     fastestdet.clear();
     blob_pool_allocator.clear();
@@ -122,44 +122,6 @@ int FastestDet::load(const char* modeltype, int _target_size, const float* _mean
 #if NCNN_VULKAN
     fastestdet.opt.use_vulkan_compute = use_gpu;
 #endif
-
-    fastestdet.opt.num_threads = ncnn::get_big_cpu_count();
-    fastestdet.opt.blob_allocator = &blob_pool_allocator;
-    fastestdet.opt.workspace_allocator = &workspace_pool_allocator;
-
-    char parampath[256];
-    char modelpath[256];
-    sprintf(parampath, "FastestDet.param", modeltype);
-    sprintf(modelpath, "FastestDet.bin", modeltype);
-
-    fastestdet.load_param(parampath);
-    fastestdet.load_model(modelpath);
-
-    target_size = _target_size;
-    mean_vals[0] = _mean_vals[0];
-    mean_vals[1] = _mean_vals[1];
-    mean_vals[2] = _mean_vals[2];
-    norm_vals[0] = _norm_vals[0];
-    norm_vals[1] = _norm_vals[1];
-    norm_vals[2] = _norm_vals[2];
-
-    return 0;
-}
-
-int FastestDet::load(AAssetManager* mgr, const char* modeltype, int _target_size, const float* _mean_vals, const float* _norm_vals, bool use_gpu)
-{
-    fastestdet.clear();
-    blob_pool_allocator.clear();
-    workspace_pool_allocator.clear();
-
-    ncnn::set_cpu_powersave(2);
-    ncnn::set_omp_num_threads(ncnn::get_big_cpu_count());
-
-    nanodet_plus.opt = ncnn::Option();
-
-#if NCNN_VULKAN
-    fastestdet.opt.use_vulkan_compute = use_gpu;
-#endif
     fastestdet.opt.use_winograd_convolution = true;
     fastestdet.opt.use_sgemm_convolution = true;
     fastestdet.opt.use_int8_inference = true;
@@ -168,13 +130,8 @@ int FastestDet::load(AAssetManager* mgr, const char* modeltype, int _target_size
     fastestdet.opt.blob_allocator = &blob_pool_allocator;
     fastestdet.opt.workspace_allocator = &workspace_pool_allocator;
 
-    char parampath[256];
-    char modelpath[256];
-    sprintf(parampath, "FastestDet.param", modeltype);
-    sprintf(modelpath, "FastestDet.bin", modeltype);
-
-    fastestdet.load_param(mgr, parampath);
-    fastestdet.load_model(mgr, modelpath);
+    fastestdet.load_param(mgr, "FastestDet.param");
+    fastestdet.load_model(mgr, "FastestDet.bin");
 
     target_size = _target_size;
     mean_vals[0] = _mean_vals[0];
@@ -195,17 +152,17 @@ int FastestDet::detect(const cv::Mat& rgb, std::vector<Object>& objects, float p
                                                         rgb.rows, target_size, target_size);
 
         input.substract_mean_normalize(mean_vals, norm_vals);
-        ncnn::Extractor ex = detector.create_extractor();
+        ncnn::Extractor ex = fastestdet.create_extractor();
 
         ex.input("data", input);
         ex.extract("output", out);
     }
 
-    int                  c_step = out.cstep;
-    float                obj_score;
-    std::vector<Object> proposals;
+    const int    c_step = out.cstep;
+    const int num_class = out.c;
 
-    int count = 0;
+    float               obj_score;
+    std::vector<Object> proposals;
 
     for (int h = 0; h < out.h; h++) {
         float *ptr = out.row(h);
@@ -237,14 +194,7 @@ int FastestDet::detect(const cv::Mat& rgb, std::vector<Object>& objects, float p
                 obj.rect.height = box_height * rgb.rows;
                 obj.label = max_cls_idx;
                 obj.prob = obj_score;
-//                info.x1    = (x_center - 0.5 * box_width) * ocv_input.cols;
-//                info.y1    = (y_center - 0.5 * box_height) * ocv_input.rows;
-//                info.x2    = (x_center + 0.5 * box_width) * ocv_input.cols;
-//                info.y2    = (y_center + 0.5 * box_height) * ocv_input.rows;
-//                info.label = max_cls_idx;
-//                info.score = obj_score;
-
-                results.push_back(info);
+                proposals.push_back(obj);
             }
             ptr++;
         }
@@ -329,10 +279,6 @@ int FastestDet::draw(cv::Mat& rgb, const std::vector<Object>& objects)
     for (size_t i = 0; i < objects.size(); i++)
     {
         const Object& obj = objects[i];
-
-//         fprintf(stderr, "%d = %.5f at %.2f %.2f %.2f x %.2f\n", obj.label, obj.prob,
-//                 obj.rect.x, obj.rect.y, obj.rect.width, obj.rect.height);
-
         const unsigned char* color = colors[color_index % 19];
         color_index++;
 
