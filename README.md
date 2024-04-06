@@ -1,7 +1,9 @@
 # ncnn-android-nanodet-plus
-This a fork of ncnn-android-nanodet for testing Nanodet Plus performance on my phone
+This a fork of ncnn-android-nanodet for testing some light weight object detection on Android
+- NanodetPlus
+- FastestDet
 
-
+To build this project, you will need to modify the CMakeList to link opencv-mobbile and ncnn, set gradle JDK to Java 1.8, and add ndk location to local.properties.
 
 # ncnn-android-nanodet(Original ReadME.md)
 
