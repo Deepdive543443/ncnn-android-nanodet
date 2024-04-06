@@ -8,6 +8,18 @@
 #include <opencv2/core/core.hpp>
 #include <net.h>
 
+static inline float fast_exp(float x)
+{
+    union {
+        __uint32_t i;
+        float      f;
+    } v;
+    v.i = (1 << 23) * (1.4426950409 * x + 126.93490512f);
+    return v.f;
+}
+#define FAST_SIGMOID(X) (1.0f / (1.0f + fast_exp(-X)))
+#define FAST_TANH(X)    (2.f / (1.f + fast_exp(-2 * X)) - 1.f)
+
 typedef struct Object
 {
     cv::Rect_<float> rect;

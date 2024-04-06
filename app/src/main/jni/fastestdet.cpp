@@ -102,83 +102,6 @@ static void nms_sorted_bboxes(const std::vector<Object>& objects, std::vector<in
     }
 }
 
-static void generate_proposals(ncnn::Mat& cls_pred, ncnn::Mat& dis_pred, int stride, const ncnn::Mat& in_pad, float prob_threshold, std::vector<Object>& objects)
-{
-    const int num_grid_x = cls_pred.w;
-    const int num_grid_y = cls_pred.h;
-    const int num_class = cls_pred.c;
-    const int cstep_cls = cls_pred.cstep;
-
-    const int reg_max_1 = dis_pred.w / 4;
-    const int hstep_dis = dis_pred.cstep;
-
-    for (int i = 0; i < num_grid_y; i++)
-    {
-        for (int j = 0; j < num_grid_x; j++)
-        {
-            float *score_ptr = cls_pred.row(i) + j;
-            float max_score = -FLT_MAX;
-            int max_label = -1;
-
-            for (int cls = 0; cls < num_class; cls++)
-            {
-                if (score_ptr[cls * cstep_cls] > max_score)
-                {
-                    max_score = score_ptr[cls * cstep_cls];
-                    max_label = cls;
-                }
-            }
-
-            if (max_score >= prob_threshold)
-            {
-                ncnn::Mat bbox_pred(reg_max_1, 4, (void*) (dis_pred.row(j) + i * hstep_dis));
-                {
-                    ncnn::Layer* softmax = ncnn::create_layer("Softmax");
-
-                    ncnn::ParamDict pd;
-                    pd.set(0, 1); // axis
-                    pd.set(1, 1);
-                    softmax->load_param(pd);
-
-                    ncnn::Option opt;
-                    opt.num_threads = 1;
-                    opt.use_packing_layout = false;
-
-                    softmax->create_pipeline(opt);
-                    softmax->forward_inplace(bbox_pred, opt);
-                    softmax->destroy_pipeline(opt);
-
-                    delete softmax;
-                }
-
-                float pred_ltrb[4];
-                for (int k = 0; k < 4; k++)
-                {
-                    float dis = 0.f;
-                    const float* dis_after_sm = bbox_pred.row(k);
-                    for (int l = 0; l < reg_max_1; l++)
-                    {
-                        dis += l * dis_after_sm[l];
-                    }
-                    pred_ltrb[k] = dis * stride;
-                }
-
-                float x_center = j * stride;
-                float y_center = i * stride;
-
-                Object obj;
-                obj.rect.x = x_center - pred_ltrb[0];
-                obj.rect.y = y_center - pred_ltrb[1];
-                obj.rect.width =  pred_ltrb[2] + pred_ltrb[0];
-                obj.rect.height = pred_ltrb[3] + pred_ltrb[1];
-                obj.label = max_label;
-                obj.prob = max_score;
-                objects.push_back(obj);
-            }
-        }
-    }
-}
-
 FastestDet::FastestDet()
 {
     blob_pool_allocator.set_size_compare_ratio(0.f);
@@ -187,30 +110,30 @@ FastestDet::FastestDet()
 
 int FastestDet::load(const char* modeltype, int _target_size, const float* _mean_vals, const float* _norm_vals, bool use_gpu)
 {
-    nanodet_plus.clear();
+    fastestdet.clear();
     blob_pool_allocator.clear();
     workspace_pool_allocator.clear();
 
     ncnn::set_cpu_powersave(2);
     ncnn::set_omp_num_threads(ncnn::get_big_cpu_count());
 
-    nanodet_plus.opt = ncnn::Option();
+    fastestdet.opt = ncnn::Option();
 
 #if NCNN_VULKAN
-    nanodet_plus.opt.use_vulkan_compute = use_gpu;
+    fastestdet.opt.use_vulkan_compute = use_gpu;
 #endif
 
-    nanodet_plus.opt.num_threads = ncnn::get_big_cpu_count();
-    nanodet_plus.opt.blob_allocator = &blob_pool_allocator;
-    nanodet_plus.opt.workspace_allocator = &workspace_pool_allocator;
+    fastestdet.opt.num_threads = ncnn::get_big_cpu_count();
+    fastestdet.opt.blob_allocator = &blob_pool_allocator;
+    fastestdet.opt.workspace_allocator = &workspace_pool_allocator;
 
     char parampath[256];
     char modelpath[256];
-    sprintf(parampath, "nanodet-%s.param", modeltype);
-    sprintf(modelpath, "nanodet-%s.bin", modeltype);
+    sprintf(parampath, "FastestDet.param", modeltype);
+    sprintf(modelpath, "FastestDet.bin", modeltype);
 
-    nanodet_plus.load_param(parampath);
-    nanodet_plus.load_model(modelpath);
+    fastestdet.load_param(parampath);
+    fastestdet.load_model(modelpath);
 
     target_size = _target_size;
     mean_vals[0] = _mean_vals[0];
@@ -235,7 +158,7 @@ int FastestDet::load(AAssetManager* mgr, const char* modeltype, int _target_size
     nanodet_plus.opt = ncnn::Option();
 
 #if NCNN_VULKAN
-    nanodet_plus.opt.use_vulkan_compute = use_gpu;
+    fastestdet.opt.use_vulkan_compute = use_gpu;
 #endif
     fastestdet.opt.use_winograd_convolution = true;
     fastestdet.opt.use_sgemm_convolution = true;
@@ -268,8 +191,8 @@ int FastestDet::detect(const cv::Mat& rgb, std::vector<Object>& objects, float p
 {
     ncnn::Mat out;
     {
-        ncnn::Mat input = ncnn::Mat::from_pixels_resize(ocv_input.data, ncnn::Mat::PIXEL_BGR, ocv_input.cols,
-                                                        ocv_input.rows, input_size[0], input_size[1]);
+        ncnn::Mat input = ncnn::Mat::from_pixels_resize(rgb.data, ncnn::Mat::PIXEL_BGR, rgb.cols,
+                                                        rgb.rows, target_size, target_size);
 
         input.substract_mean_normalize(mean_vals, norm_vals);
         ncnn::Extractor ex = detector.create_extractor();
@@ -280,7 +203,7 @@ int FastestDet::detect(const cv::Mat& rgb, std::vector<Object>& objects, float p
 
     int                  c_step = out.cstep;
     float                obj_score;
-    std::vector<BoxInfo> results;
+    std::vector<Object> proposals;
 
     int count = 0;
 
@@ -298,7 +221,71 @@ int FastestDet::detect(const cv::Mat& rgb, std::vector<Object>& objects, float p
                     max_cls_idx   = c;
                 }
             }
-    return 0;
+
+            if (pow(max_cls_score, 0.4) * pow(obj_score, 0.6) > 0.65) {
+                float x_offset   = FAST_TANH(ptr[c_step]);
+                float y_offset   = FAST_TANH(ptr[c_step * 2]);
+                float box_width  = FAST_SIGMOID(ptr[c_step * 3]);
+                float box_height = FAST_SIGMOID(ptr[c_step * 4]);
+                float x_center   = (w + x_offset) / out.w;
+                float y_center   = (h + y_offset) / out.h;
+
+                Object obj;
+                obj.rect.x = (x_center - 0.5 * box_width) * rgb.cols;
+                obj.rect.y = (y_center - 0.5 * box_height) * rgb.rows;
+                obj.rect.width =  box_width * rgb.cols;
+                obj.rect.height = box_height * rgb.rows;
+                obj.label = max_cls_idx;
+                obj.prob = obj_score;
+//                info.x1    = (x_center - 0.5 * box_width) * ocv_input.cols;
+//                info.y1    = (y_center - 0.5 * box_height) * ocv_input.rows;
+//                info.x2    = (x_center + 0.5 * box_width) * ocv_input.cols;
+//                info.y2    = (y_center + 0.5 * box_height) * ocv_input.rows;
+//                info.label = max_cls_idx;
+//                info.score = obj_score;
+
+                results.push_back(info);
+            }
+            ptr++;
+        }
+    }
+
+    qsort_descent_inplace(proposals);
+    std::vector<int> picked;
+    nms_sorted_bboxes(proposals, picked, nms_threshold);
+
+    int count = picked.size();
+    objects.resize(count);
+    for (int i = 0; i < count; i++)
+    {
+        objects[i] = proposals[picked[i]];
+
+        // Transfer to x0y0x1y1
+        float x0 = objects[i].rect.x;
+        float y0 = objects[i].rect.y;
+        float x1 = objects[i].rect.x + objects[i].rect.width;
+        float y1 = objects[i].rect.y + objects[i].rect.height;
+
+        // clip
+        x0 = std::max(std::min(x0, (float)(rgb.cols - 1)), 0.f);
+        y0 = std::max(std::min(y0, (float)(rgb.rows - 1)), 0.f);
+        x1 = std::max(std::min(x1, (float)(rgb.cols - 1)), 0.f);
+        y1 = std::max(std::min(y1, (float)(rgb.rows - 1)), 0.f);
+
+        objects[i].rect.x = x0;
+        objects[i].rect.y = y0;
+        objects[i].rect.width = x1 - x0;
+        objects[i].rect.height = y1 - y0;
+    }
+    struct
+    {
+        bool operator()(const Object& a, const Object& b) const
+        {
+            return a.rect.area() > b.rect.area();
+        }
+    } objects_area_greater;
+    std::sort(objects.begin(), objects.end(), objects_area_greater);
+    return 1;
 }
 
 int FastestDet::draw(cv::Mat& rgb, const std::vector<Object>& objects)
