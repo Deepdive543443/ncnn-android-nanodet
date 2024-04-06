@@ -47,13 +47,13 @@ static void qsort_descent_inplace(std::vector<Object>& objects, int left, int ri
         }
     }
 
-#pragma omp parallel sections
+    #pragma omp parallel sections
     {
-#pragma omp section
+        #pragma omp section
         {
             if (left < j) qsort_descent_inplace(objects, left, j);
         }
-#pragma omp section
+        #pragma omp section
         {
             if (i < right) qsort_descent_inplace(objects, i, right);
         }
@@ -185,7 +185,7 @@ FastestDet::FastestDet()
     workspace_pool_allocator.set_size_compare_ratio(0.f);
 }
 
-int NanoDetPlus::load(const char* modeltype, int _target_size, const float* _mean_vals, const float* _norm_vals, bool use_gpu)
+int FastestDet::load(const char* modeltype, int _target_size, const float* _mean_vals, const float* _norm_vals, bool use_gpu)
 {
     nanodet_plus.clear();
     blob_pool_allocator.clear();

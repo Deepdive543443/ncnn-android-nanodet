@@ -1,13 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">NanodetPlusNcnn</string>
+    <string name="app_name">FastestDet</string>
     <string-array name="model_array">
-        <item>plus-m_320</item>
-        <item>plus-m_416</item>
-        <item>plus-m_416_int8</item>
-        <item>plus-m-1.5x_320</item>
-        <item>plus-m-1.5x_416</item>
-        <item>plus-m-1.5x_416_int8</item>
+        <item>FastestDet</item>
     </string-array>
     <string-array name="cpugpu_array">
         <item>CPU</item>
